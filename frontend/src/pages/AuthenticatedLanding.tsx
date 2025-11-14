@@ -102,9 +102,10 @@ export default function AuthenticatedLanding() {
           <motion.div variants={fadeIn} className="mt-12 text-center">
             <Button size="lg" asChild className="group">
               <Link to={isDoctor ? "/doctor/dashboard" : "/dashboard"}>
-                Go to Dashboard
-                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </Link>
+              <Button size="lg" className="text-lg px-8 group text-white hover:bg-blue-700 cursor-pointer">
+                Go to Dashboard<ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </Button>
+            </Link>
             </Button>
           </motion.div>
         </motion.div>

@@ -58,7 +58,7 @@ export default function Login() {
                 <SelectContent>
                   <SelectItem value="patient">Patient</SelectItem>
                   <SelectItem value="doctor">Doctor</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  {/*<SelectItem value="admin">Admin</SelectItem>*/}
                 </SelectContent>
               </Select>
             </div>

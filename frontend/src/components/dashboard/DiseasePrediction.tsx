@@ -4,7 +4,8 @@ import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { toast } from 'sonner';
-import axios from '../../lib/axios';
+import axios from '../../lib/axios'; // Keep your existing axios import
+import { useNavigate } from 'react-router-dom';
 
 export default function DiseasePrediction() {
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
@@ -12,7 +13,9 @@ export default function DiseasePrediction() {
   const [loading, setLoading] = useState(false);
   const [prediction, setPrediction] = useState<string | null>(null);
   const [departments, setDepartments] = useState<string[]>([]);
+  const navigate = useNavigate();
 
+  // ... (symptoms array remains the same)
   const symptoms = [
     "itching",
     "skin_rash",
@@ -148,6 +151,10 @@ export default function DiseasePrediction() {
     "yellow_crust_ooze"
   ];
 
+  const handleBookAppointment = () => {
+    navigate('/dashboard?tab=book');
+  };
+
   const toggleSymptom = (symptom: string) => {
     setSelectedSymptoms(prev => 
       prev.includes(symptom) 
@@ -174,16 +181,29 @@ export default function DiseasePrediction() {
     }
     setLoading(true);
     try {
-      const response = await axios.post('/user/predictDisease', { symptoms: selectedSymptoms });
-      setPrediction(response.data.prediction || null);
-      setDepartments(response.data.departments || []);
-      toast.success(response.data.message || 'Disease prediction completed');
+      // --- FIX 1: Use the absolute URL of your deployed model ---
+      // Your app.py is at /predict, not /user/predictDisease
+      const response = await axios.post('https://medibridge-ml-model.onrender.com/predict', { 
+        symptoms: selectedSymptoms 
+      });
+
+      // --- FIX 2: Match the response keys from app.py ---
+      // Your app.py sends 'predicted_disease' and 'recommended_departments'
+      setPrediction(response.data.predicted_disease || null);
+      setDepartments(response.data.recommended_departments || []);
+      
+      toast.success('Disease prediction completed');
+
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to get disease prediction');
+      // Updated error handling to show the backend's error message
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to get disease prediction';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
+
+  // --- No changes below this line ---
 
   return (
     <div className="space-y-4">
@@ -301,7 +321,7 @@ export default function DiseasePrediction() {
             <Button variant="outline" onClick={() => { setPrediction(null); setDepartments([]); }}>
               Clear Results
             </Button>
-            <Button>
+            <Button onClick={handleBookAppointment}>
               Book Doctor Appointment
             </Button>
           </CardFooter>
@@ -309,4 +329,4 @@ export default function DiseasePrediction() {
       )}
     </div>
   );
-} 
+}

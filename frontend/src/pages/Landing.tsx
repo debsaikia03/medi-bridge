@@ -36,7 +36,7 @@ function UnauthenticatedLanding() {
   const [hoveredCard, setHoveredCard] = useState<number | null>(null);
 
   return (
-    <div ref={containerRef} className="min-h-screen">
+    <div ref={containerRef} className="min-h-screen cursor-default">
       <section className="relative py-20 px-4 text-center overflow-hidden">
         <motion.div
           style={{ y, opacity }}
@@ -132,6 +132,7 @@ function UnauthenticatedLanding() {
                 isHovered={hoveredCard === index}
                 onHover={() => setHoveredCard(index)}
                 onLeave={() => setHoveredCard(null)}
+                className="cursor-pointer"
               />
             ))}
           </motion.div>
@@ -143,7 +144,7 @@ function UnauthenticatedLanding() {
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-8">MediBridge Features</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {/* Core Healthcare */}
-            <div className="bg-muted/40 rounded-xl p-6 shadow flex flex-col gap-3">
+            <div className="bg-muted/40 rounded-xl p-6 shadow flex flex-col gap-3 cursor-pointer">
               <div className="flex items-center gap-3 mb-2">
                 <Shield className="w-7 h-7 text-primary" />
                 <span className="font-semibold text-lg">Secure Digital Health</span>
@@ -157,7 +158,7 @@ function UnauthenticatedLanding() {
               </ul>
             </div>
             {/* Mental Health & Wellness */}
-            <div className="bg-muted/40 rounded-xl p-6 shadow flex flex-col gap-3">
+            <div className="bg-muted/40 rounded-xl p-6 shadow flex flex-col gap-3 cursor-pointer">
               <div className="flex items-center gap-3 mb-2">
                 <Heart className="w-7 h-7 text-primary" />
                 <span className="font-semibold text-lg">Mental Wellness</span>
@@ -171,7 +172,7 @@ function UnauthenticatedLanding() {
               </ul>
             </div>
             {/* Nutrition & Lifestyle */}
-            <div className="bg-muted/40 rounded-xl p-6 shadow flex flex-col gap-3">
+            <div className="bg-muted/40 rounded-xl p-6 shadow flex flex-col gap-3 cursor-pointer">
               <div className="flex items-center gap-3 mb-2">
                 <Flame className="w-7 h-7 text-primary" />
                 <span className="font-semibold text-lg">Nutrition & Lifestyle</span>
@@ -183,7 +184,7 @@ function UnauthenticatedLanding() {
               </ul>
             </div>
             {/* Community & Engagement */}
-            <div className="bg-muted/40 rounded-xl p-6 shadow flex flex-col gap-3">
+            <div className="bg-muted/40 rounded-xl p-6 shadow flex flex-col gap-3 cursor-pointer">
               <div className="flex items-center gap-3 mb-2">
                 <Users className="w-7 h-7 text-primary" />
                 <span className="font-semibold text-lg">Community Support</span>
@@ -195,7 +196,7 @@ function UnauthenticatedLanding() {
               </ul>
             </div>
             {/* Security & Privacy */}
-            <div className="bg-muted/40 rounded-xl p-6 shadow flex flex-col gap-3">
+            <div className="bg-muted/40 rounded-xl p-6 shadow flex flex-col gap-3 cursor-pointer">
               <div className="flex items-center gap-3 mb-2">
                 <Shield className="w-7 h-7 text-primary" />
                 <span className="font-semibold text-lg">Security & Privacy</span>
@@ -207,7 +208,7 @@ function UnauthenticatedLanding() {
               </ul>
             </div>
             {/* Accessibility */}
-            <div className="bg-muted/40 rounded-xl p-6 shadow flex flex-col gap-3">
+            <div className="bg-muted/40 rounded-xl p-6 shadow flex flex-col gap-3 cursor-pointer">
               <div className="flex items-center gap-3 mb-2">
                 <Activity className="w-7 h-7 text-primary" />
                 <span className="font-semibold text-lg">Accessibility</span>
@@ -425,11 +426,11 @@ const features = [
   }
 ];
 
-function FeatureCard({ icon, title, description, isHovered, onHover, onLeave }: { icon: React.ReactNode; title: string; description: string; isHovered: boolean; onHover: () => void; onLeave: () => void }) {
+function FeatureCard({ icon, title, description, isHovered, onHover, onLeave, className }: { icon: React.ReactNode; title: string; description: string; isHovered: boolean; onHover: () => void; onLeave: () => void; className?: string }) {
   return (
     <motion.div
       variants={fadeIn}
-      className="bg-muted/30 p-6 rounded-xl"
+      className={`bg-muted/30 p-6 rounded-xl ${className ?? ""}`}
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
       onHoverStart={onHover}

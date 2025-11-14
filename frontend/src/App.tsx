@@ -29,11 +29,18 @@ function App() {
         <Router>
           <Layout>
             <Routes>
+              {/* Public Routes */}
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
 
-              <Route element={<ProtectedRoute role="patient" />}>
+              {/* Shared Protected Routes (Patient, Doctor, Admin) */}
+              <Route element={<ProtectedRoute roles={['patient', 'doctor', 'admin']} />}>
+                <Route path="/community-forum" element={<CommunityForum />} />
+              </Route>
+
+              {/* Patient-Only Routes */}
+              <Route element={<ProtectedRoute roles={['patient']} />}>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/mental-health" element={<MentalHealth />} />
                 <Route path="/mental-health/chat" element={<Chat />} />
@@ -44,18 +51,21 @@ function App() {
                 <Route path="/mental-health/community" element={<Community />} />
                 <Route path="/mental-health/assessment" element={<Assessment />} />
                 <Route path="/food-info" element={<FoodInfo />} />
-                <Route path="/community-forum" element={<CommunityForum />} />
               </Route>
 
-              <Route element={<ProtectedRoute role="doctor" />}>
+              {/* Doctor-Only Routes */}
+              <Route element={<ProtectedRoute roles={['doctor']} />}>
                 <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
-                <Route path="/community-forum" element={<CommunityForum />} />
+                {/* Community forum is now in the shared block */}
               </Route>
 
-              <Route element={<ProtectedRoute role="admin" />}>
+              {/* Admin-Only Routes */}
+              <Route element={<ProtectedRoute roles={['admin']} />}>
                 <Route path="/admin/dashboard" element={<AdminDashboard />} />
-                <Route path="/community-forum" element={<CommunityForum />} />
+                {/* Community forum is now in the shared block */}
               </Route>
+
+              {/* Fallback Route */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>

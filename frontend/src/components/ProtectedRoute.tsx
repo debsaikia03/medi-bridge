@@ -2,10 +2,11 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 interface ProtectedRouteProps {
-  role: 'patient' | 'doctor' | 'admin';
+  // Change 'role' to 'roles' and accept an array
+  roles: ('patient' | 'doctor' | 'admin')[];
 }
 
-export default function ProtectedRoute({ role }: ProtectedRouteProps) {
+export default function ProtectedRoute({ roles }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
@@ -16,8 +17,14 @@ export default function ProtectedRoute({ role }: ProtectedRouteProps) {
     return <Navigate to="/login" replace />;
   }
 
-  if (user.role !== role) {
-    switch (user.role) {
+  // FIX: Map the 'user' role to 'patient' for all logic in this component.
+  // This resolves the TypeScript error and matches the AuthContext logic.
+  const userAppRole = user.role === 'user' ? 'patient' : user.role;
+
+  // Check if the user's *application role* is included in the allowed roles
+  if (!roles.includes(userAppRole)) {
+    // Use the mapped userAppRole for the redirect logic as well
+    switch (userAppRole) {
       case 'admin':
         return <Navigate to="/admin/dashboard" replace />;
       case 'doctor':
@@ -25,9 +32,10 @@ export default function ProtectedRoute({ role }: ProtectedRouteProps) {
       case 'patient':
         return <Navigate to="/dashboard" replace />;
       default:
+        // This will catch any other unhandled roles
         return <Navigate to="/login" replace />;
     }
   }
 
   return <Outlet />;
-} 
+}

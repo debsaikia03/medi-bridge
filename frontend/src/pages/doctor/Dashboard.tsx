@@ -48,19 +48,23 @@ export default function DoctorDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
+const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await axios.get('/doctor/appointments');
       const appointmentsRaw = res.data.appointments || [];
+      
+      // ✅ FIX: Correctly map the populated data from the backend
       const normalized = appointmentsRaw.map((a: any) => ({
-        id: a.id,
+        id: a._id, // Use Mongoose _id
         status: a.status,
-        patient: a.patient,
-        date: a.date,
-        time: a.slot
+        patient: a.userId ? a.userId.name : 'Unknown Patient', // Access populated userId.name
+        date: new Date(a.date).toISOString().split('T')[0], // Standardize date format
+        time: a.slot,
+        type: a.userId ? `Patient Email: ${a.userId.email}` : 'No email' // Example of using other populated data
       }));
+      
       setFilteredAppointments(normalized);
     } catch (err: any) {
       if (err.response?.data?.message === "No appointments found for this doctor.") {
@@ -100,44 +104,20 @@ export default function DoctorDashboard() {
     }
   };
 
-  const saveAvailability = async () => {
+const saveAvailability = async () => {
     if (!selectedDate || selectedSlots.length === 0) {
       toast.error('Please select a date and at least one time slot');
       return;
     }
 
+    // This is correct
     const formattedDate = selectedDate.toISOString().split('T')[0];
-    const formattedSlots = selectedSlots.map(slot => {
-      const [time, period] = slot.split(' ');
-      const [hour, minute] = time.split(':');
-      let hourNum = parseInt(hour);
-
-      if (period === 'PM' && hourNum !== 12) hourNum += 12;
-      else if (period === 'AM' && hourNum === 12) hourNum = 0;
-
-      const startTime = `${hourNum.toString().padStart(2, '0')}:${minute}`;
-
-      let endHourNum = hourNum;
-      let endMinute = parseInt(minute);
-
-      if (endMinute === 30) {
-        endHourNum += 1;
-        endMinute = 0;
-      } else {
-        endMinute = 30;
-      }
-
-      if (endHourNum === 24) endHourNum = 0;
-
-      const endTime = `${endHourNum.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
-
-      return { start: startTime, end: endTime };
-    });
 
     try {
-      await axios.post('/doctor/availability', {
+      // ✅ FIX 1: Change the API endpoint
+      await axios.post('/doctor/set-availability', {
         date: formattedDate,
-        slots: formattedSlots
+        slots: selectedSlots // ✅ FIX 2: Send 'selectedSlots' directly
       });
 
       toast.success('Availability saved successfully');
@@ -158,33 +138,60 @@ export default function DoctorDashboard() {
       toast.error('Failed to save availability. Please try again.');
     }
   };
+// Error
+  // const updateAppointmentStatus = async (appointmentId: number, newStatus: string) => {
+  //   try {
+  //     await axios.patch('/doctor/appointments/update-status', {
+  //       appointmentId: String(appointmentId),
+  //       stat: newStatus
+  //     });
 
-  const updateAppointmentStatus = async (appointmentId: number, newStatus: string) => {
-    try {
-      await axios.patch('/doctor/appointments/update-status', {
-        appointmentId: String(appointmentId),
-        stat: newStatus
-      });
+  //     setFilteredAppointments(prevAppointments =>
+  //       prevAppointments.map(appointment =>
+  //         appointment.id === appointmentId
+  //           ? { ...appointment, status: newStatus }
+  //           : appointment
+  //       )
+  //     );
 
-      setFilteredAppointments(prevAppointments =>
-        prevAppointments.map(appointment =>
-          appointment.id === appointmentId
-            ? { ...appointment, status: newStatus }
-            : appointment
-        )
-      );
+  //     setAppointmentStatus({
+  //       ...appointmentStatus,
+  //       [appointmentId]: newStatus
+  //     });
 
-      setAppointmentStatus({
-        ...appointmentStatus,
-        [appointmentId]: newStatus
-      });
+  //     toast.success(`Appointment status updated to ${newStatus}`);
+  //   } catch (error) {
+  //     console.error('Error updating appointment status:', error);
+  //     toast.error('Failed to update appointment status. Please try again.');
+  //   }
+  // };
 
-      toast.success(`Appointment status updated to ${newStatus}`);
-    } catch (error) {
-      console.error('Error updating appointment status:', error);
-      toast.error('Failed to update appointment status. Please try again.');
-    }
-  };
+ // Changed
+ const updateAppointmentStatus = async (appointmentId: number, newStatus: string) => {
+  try {
+    await axios.put(`/doctor/appointments/${appointmentId}/status`, {
+      status: newStatus
+    });
+
+    setFilteredAppointments(prevAppointments =>
+      prevAppointments.map(appointment =>
+        appointment.id === appointmentId
+          ? { ...appointment, status: newStatus }
+          : appointment
+      )
+    );
+
+    setAppointmentStatus({
+      ...appointmentStatus,
+      [appointmentId]: newStatus
+    });
+
+    toast.success(`Appointment status updated to ${newStatus}`);
+  } catch (error) {
+    console.error('Error updating appointment status:', error);
+    toast.error('Failed to update appointment status. Please try again.');
+  }
+};
 
   return (
     <div className="container py-8 space-y-8">
