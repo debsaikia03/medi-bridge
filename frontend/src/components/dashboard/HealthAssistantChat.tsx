@@ -120,7 +120,7 @@ export default function HealthAssistantChat({ open, onClose }: { open: boolean; 
               <X size={18} />
             </Button>
           </div>
-          <div className="flex-1 overflow-y-auto px-4 py-2" style={{ maxHeight: 'calc(70vh - 100px)' }}>
+          <div className="flex-1 overflow-y-auto px-4 py-2 min-h-0">
             {messages.map((msg, idx) => (
               <div key={idx} className={`mb-2 flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 aria-live={msg.sender === 'bot' ? 'polite' : undefined}

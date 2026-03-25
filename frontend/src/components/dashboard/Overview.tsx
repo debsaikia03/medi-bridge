@@ -1,6 +1,6 @@
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Activity, Calendar, Heart, Scale, Stethoscope, MessageSquare, Flame } from 'lucide-react';
+import { Activity, Calendar, Heart, Scale, Stethoscope, MessageSquare, Flame, FileText } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useNavigate } from 'react-router-dom';
 
@@ -10,10 +10,9 @@ export default function Overview() {
 
   if (!user) return <div>Loading...</div>;
 
-  // Mocked Google Fit data on user object for demo
-  const heartRate = (user as any).heartRate ?? 72; // bpm
+  const heartRate = (user as any).heartRate ?? 72;
   const dailySteps = (user as any).dailySteps ?? 8500;
-  const caloriesBurned = (user as any).caloriesBurned ?? 2200; // kcal
+  const caloriesBurned = (user as any).caloriesBurned ?? 2200;
 
   const handleBookAppointment = () => {
     navigate('/dashboard?tab=book');
@@ -27,12 +26,14 @@ export default function Overview() {
     navigate('/dashboard?tab=overview', { state: { openChat: true } });
   };
 
-  const handleTrackVitals = () => {
-    navigate('/dashboard?tab=profile');
+  // Re-adding the external link logic from the first version
+  const handleUploadPrescription = () => {
+    window.open('https://bornik.pythonanywhere.com/', '_blank');
   };
 
   return (
     <div className="space-y-4">
+      {/* Stats Cards Row */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -81,7 +82,6 @@ export default function Overview() {
         </Card>
       </div>
 
-      {/* Keep Quick Actions and Upcoming Appointments as-is or remove if you want */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -115,18 +115,21 @@ export default function Overview() {
                 <MessageSquare className="mb-2 h-6 w-6" />
                 Ask Health Assistant 
               </Button>
+              
+              {/* This button now uses the external link from version one */}
               <Button 
                 className="h-20 flex flex-col items-center justify-center text-base font-semibold" 
                 variant="outline"
-                onClick={handleTrackVitals}
+                onClick={handleUploadPrescription}
               >
-                <Activity className="mb-2 h-6 w-6" />
-                Track Vitals
+                <FileText className="mb-2 h-6 w-6" />
+                Upload Prescription
               </Button>
             </div>
           </CardContent>
         </Card>
 
+        {/* Appointment Card */}
         <Card>
           <CardHeader>
             <CardTitle>Upcoming Appointments</CardTitle>

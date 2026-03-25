@@ -4,11 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../..
 import { Button } from '../../components/ui/button';
 import { Textarea } from '../../components/ui/textarea';
 import { Input } from '../../components/ui/input';
-import { PenTool, Calendar, Clock, Search, Trash2, Edit2 } from 'lucide-react';
+import { PenTool, Calendar, Clock, Search, Trash2, Edit2, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import api from '../../lib/axios'; // Adjust this import based on your actual axios utility
 
 interface JournalEntry {
-  id: string;
+  _id: string; // Changed from id to _id for MongoDB
   title: string;
   content: string;
   mood: string;
@@ -27,6 +28,9 @@ const Journal: React.FC = () => {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [mood, setMood] = useState('');
@@ -34,21 +38,29 @@ const Journal: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMood, setFilterMood] = useState('');
 
+  // Fetch entries from the backend on mount
   useEffect(() => {
-    // Load entries from localStorage
-    const savedEntries = localStorage.getItem('journalEntries');
-    if (savedEntries) {
-      setEntries(JSON.parse(savedEntries));
-    }
-  }, []);
+    const fetchJournals = async () => {
+      try {
+        setIsLoading(true);
+        const response = await api.get('/journals');
+        setEntries(response.data);
+      } catch (error) {
+        console.error('Failed to fetch journal entries:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
+    if (user) {
+      fetchJournals();
+    }
+  }, [user]);
+
+  // Update chatbot memory when entries change
   useEffect(() => {
-    // Save entries to localStorage
-    localStorage.setItem('journalEntries', JSON.stringify(entries));
-    
-    // Store entries in chatbot's memory
     if (entries.length > 0) {
-      const lastEntry = entries[entries.length - 1];
+      const lastEntry = entries[0]; // Assuming the API returns them sorted by newest first
       const chatbotMemory = {
         type: 'journal_entry',
         userId: user?.id,
@@ -60,59 +72,68 @@ const Journal: React.FC = () => {
           timestamp: lastEntry.createdAt
         }
       };
-      
-      // Store in localStorage for chatbot to access
       localStorage.setItem('chatbotMemory', JSON.stringify(chatbotMemory));
     }
   }, [entries, user?.id]);
 
-  const createEntry = () => {
-    const newEntry: JournalEntry = {
-      id: Date.now().toString(),
-      title: title || 'Untitled Entry',
-      content,
-      mood,
-      tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+  const createEntry = async () => {
+    try {
+      setIsSaving(true);
+      const newEntryData = {
+        title: title || 'Untitled Entry',
+        content,
+        mood,
+        tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
+      };
 
-    setEntries([newEntry, ...entries]);
-    setTitle('');
-    setContent('');
-    setMood('');
-    setTags('');
-    setIsEditing(false);
+      const response = await api.post('/journals', newEntryData);
+      
+      setEntries([response.data, ...entries]);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to create journal entry:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const updateEntry = () => {
+  const updateEntry = async () => {
     if (!selectedEntry) return;
 
-    const updatedEntry: JournalEntry = {
-      ...selectedEntry,
-      title: title || 'Untitled Entry',
-      content,
-      mood,
-      tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
-      updatedAt: new Date().toISOString()
-    };
+    try {
+      setIsSaving(true);
+      const updatedEntryData = {
+        title: title || 'Untitled Entry',
+        content,
+        mood,
+        tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
+      };
 
-    setEntries(entries.map(entry => 
-      entry.id === selectedEntry.id ? updatedEntry : entry
-    ));
-    setSelectedEntry(null);
-    setTitle('');
-    setContent('');
-    setMood('');
-    setTags('');
-    setIsEditing(false);
+      const response = await api.put(`/journals/${selectedEntry._id}`, updatedEntryData);
+
+      setEntries(entries.map(entry => 
+        entry._id === selectedEntry._id ? response.data : entry
+      ));
+      resetForm();
+    } catch (error) {
+      console.error('Failed to update journal entry:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const deleteEntry = (id: string) => {
-    setEntries(entries.filter(entry => entry.id !== id));
-    if (selectedEntry?.id === id) {
-      setSelectedEntry(null);
-      setIsEditing(false);
+  const deleteEntry = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this entry?")) return;
+    
+    try {
+      await api.delete(`/journals/${id}`);
+      setEntries(entries.filter(entry => entry._id !== id));
+      
+      if (selectedEntry?._id === id) {
+        resetForm();
+      }
+    } catch (error) {
+      console.error('Failed to delete journal entry:', error);
     }
   };
 
@@ -120,9 +141,18 @@ const Journal: React.FC = () => {
     setSelectedEntry(entry);
     setTitle(entry.title);
     setContent(entry.content);
-    setMood(entry.mood);
+    setMood(entry.mood || '');
     setTags(entry.tags.join(', '));
     setIsEditing(true);
+  };
+
+  const resetForm = () => {
+    setSelectedEntry(null);
+    setTitle('');
+    setContent('');
+    setMood('');
+    setTags('');
+    setIsEditing(false);
   };
 
   const filteredEntries = entries.filter(entry => {
@@ -178,71 +208,79 @@ const Journal: React.FC = () => {
                 </select>
               </div>
 
-              <div className="space-y-4">
-                {filteredEntries.map((entry) => (
-                  <Card
-                    key={entry.id}
-                    className="cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => setSelectedEntry(entry)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="font-semibold">{entry.title}</h3>
-                          <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-                            {entry.content}
-                          </p>
-                          <div className="flex items-center gap-4 mt-2">
-                            <div className="flex items-center gap-2">
-                              <Calendar className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-sm text-muted-foreground">
-                                {new Date(entry.createdAt).toLocaleDateString()}
-                              </span>
+              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                {isLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                ) : filteredEntries.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No journal entries found.</p>
+                ) : (
+                  filteredEntries.map((entry) => (
+                    <Card
+                      key={entry._id}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => setSelectedEntry(entry)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="font-semibold">{entry.title}</h3>
+                            <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                              {entry.content}
+                            </p>
+                            <div className="flex items-center gap-4 mt-2">
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">
+                                  {new Date(entry.createdAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">
+                                  {new Date(entry.createdAt).toLocaleTimeString()}
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-sm text-muted-foreground">
-                                {new Date(entry.createdAt).toLocaleTimeString()}
-                              </span>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {entry.tags.map((tag, index) => (
+                                <span
+                                  key={index}
+                                  className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
                             </div>
                           </div>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {entry.tags.map((tag, index) => (
-                              <span
-                                key={index}
-                                className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs"
-                              >
-                                {tag}
-                              </span>
-                            ))}
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                editEntry(entry);
+                              }}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteEntry(entry._id);
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              editEntry(entry);
-                            }}
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteEntry(entry.id);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
@@ -254,7 +292,7 @@ const Journal: React.FC = () => {
           variants={fadeIn}
           transition={{ delay: 0.2 }}
         >
-          <Card>
+          <Card className="sticky top-6">
             <CardHeader>
               <CardTitle>
                 {isEditing ? 'Edit Entry' : 'New Entry'}
@@ -309,22 +347,17 @@ const Journal: React.FC = () => {
                 {isEditing && (
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setSelectedEntry(null);
-                      setIsEditing(false);
-                      setTitle('');
-                      setContent('');
-                      setMood('');
-                      setTags('');
-                    }}
+                    onClick={resetForm}
+                    disabled={isSaving}
                   >
                     Cancel
                   </Button>
                 )}
                 <Button
                   onClick={isEditing ? updateEntry : createEntry}
-                  disabled={!content.trim()}
+                  disabled={!content.trim() || isSaving}
                 >
+                  {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   {isEditing ? 'Update Entry' : 'Save Entry'}
                 </Button>
               </div>

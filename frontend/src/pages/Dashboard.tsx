@@ -47,9 +47,9 @@ export default function Dashboard() {
           <p className="text-muted-foreground text-lg">Track your health and manage appointments</p>
         </div>
         <Button
-          className="h-12 px-6 text-base font-semibold cursor-not-allowed"
+          className="h-12 px-6 text-base font-semibold cursor-pointer"
           variant="default"
-          disabled
+          //disabled
           onClick={() => setIsChatOpen(true)}
         >
           <MessageSquare className="mr-2 h-5 w-5" />
