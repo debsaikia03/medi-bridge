@@ -1,5 +1,5 @@
 import express from "express";
-import { signUp, signIn, updateProfile, getAllDoctors, getDoctorsBySpecialization, getDoctorSlots } from "../controllers/userController.js";
+import { signUp, signIn, updateProfile, getAllDoctors, getDoctorsBySpecialization, getDoctorSlots, chatSupport } from "../controllers/userController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { 
   initiatePhoneBooking,
@@ -36,6 +36,7 @@ router.post("/bookAppointment", protect, bookAppointment);
 router.get("/getAppointments", protect, getAppointments);
 router.get("/info/:type/:id", protect, getUserOrDoctorById);
 
+router.post("/chat-support", chatSupport); 
 
 export default router;
 

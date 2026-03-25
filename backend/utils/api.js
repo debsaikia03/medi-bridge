@@ -1,55 +1,160 @@
 import axios from "axios";
 
-// 🔹 Get Food Info
+// 🔹 FatSecret API Credentials
+const CLIENT_ID = "437d3dc2ee1d4ab0bde5d5783e40aa7b";
+const CLIENT_SECRET = "fba82038c9ca4efea5ea546fc32dda21";
+
+let fatsecretToken = null;
+let tokenExpiry = 0;
+
+// 🔹 Helper: Authenticate with FatSecret API using OAuth 2.0
+const getFatsecretToken = async () => {
+  if (fatsecretToken && Date.now() < tokenExpiry) {
+    return fatsecretToken;
+  }
+  
+  const credentials = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
+
+  try {
+    // Use URLSearchParams to guarantee perfect x-www-form-urlencoded formatting
+    const authData = new URLSearchParams();
+    authData.append('grant_type', 'client_credentials');
+    authData.append('scope', 'basic'); // Reverted to just 'basic' to prevent scope rejection on free tiers
+
+    const response = await axios.post(
+      'https://oauth.fatsecret.com/connect/token',
+      authData,
+      {
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+    
+    fatsecretToken = response.data.access_token;
+    tokenExpiry = Date.now() + (response.data.expires_in - 300) * 1000;
+    return fatsecretToken;
+    
+  } catch (error) {
+    // Unmask the exact error sent by FatSecret's server
+    const errorDetails = error.response?.data 
+      ? JSON.stringify(error.response.data) 
+      : error.message;
+      
+    console.error("🚨 FatSecret OAuth Error Details:", errorDetails);
+    throw new Error(`FatSecret Auth Error: ${errorDetails}`);
+  }
+};
+
+// 🔹 Get Food Info (Using FatSecret API)
 export const getFoodInfo = async (foodName, barcode) => {
   if (!foodName && !barcode) {
     throw new Error("Either provide the food name or barcode");
   }
 
-  const filterEnglishTags = (input) => {
-    if (!input) return [];
-    let arr = Array.isArray(input)
-      ? input
-      : typeof input === "string"
-      ? input.split(",")
-      : [];
-
-    return arr
-      .map((tag) => tag.trim())
-      .filter((tag) => tag.startsWith("en:"))
-      .map((tag) => tag.substring(3)); // remove 'en:' prefix
-  };
-
   try {
-    const response = barcode
-      ? await axios.get(`https://en.openfoodfacts.net/api/v2/product/${barcode}.json`)
-      : await axios.get(
-          `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${foodName}&search_simple=1&action=process&json=1`
-        );
+    const token = await getFatsecretToken();
+    
+    const headers = { 
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    };
 
-    const data = response.data;
-    const product = barcode ? data.product : data.products[0];
+    let foodId;
 
-    if (!product) throw new Error("No product found");
+    if (barcode) {
+      // Find Food ID by Barcode using URLSearchParams
+      const data = new URLSearchParams({ method: 'food.find_id_for_barcode', barcode, format: 'json' });
+      const res = await axios.post('https://platform.fatsecret.com/rest/server.api', data, { headers });
+      
+      if (res.data?.error) throw new Error(`FatSecret API Error: ${res.data.error.message}`);
+      
+      if (res.data && res.data.food_id && res.data.food_id.value) {
+        foodId = res.data.food_id.value;
+      } else {
+        throw new Error("No product found with the provided barcode");
+      }
+    } else if (foodName) {
+      // Find Food ID by Name using URLSearchParams
+      const data = new URLSearchParams({ method: 'foods.search', search_expression: foodName, format: 'json', max_results: 1 });
+      const res = await axios.post('https://platform.fatsecret.com/rest/server.api', data, { headers });
+      
+      // Explicitly catch and bubble FatSecret API errors so you know if it's an API rejection
+      if (res.data?.error) throw new Error(`FatSecret API Error: ${res.data.error.message}`);
+      
+      const foodsInfo = res.data.foods?.food;
+      if (!foodsInfo) throw new Error(`No product found matching "${foodName}"`);
+      
+      const firstFood = Array.isArray(foodsInfo) ? foodsInfo[0] : foodsInfo;
+      if (!firstFood || !firstFood.food_id) throw new Error(`No product found matching "${foodName}"`);
+      
+      foodId = firstFood.food_id;
+    }
+
+    if (!foodId) throw new Error("No product found");
+
+    // Fetch Full Nutritional Information using Food ID
+    const foodData = new URLSearchParams({ method: 'food.get.v3', food_id: foodId, format: 'json' });
+    const foodRes = await axios.post('https://platform.fatsecret.com/rest/server.api', foodData, { headers });
+
+    if (foodRes.data?.error) throw new Error(`FatSecret API Error: ${foodRes.data.error.message}`);
+
+    const product = foodRes.data.food;
+    if (!product) throw new Error("No product details found");
+
+    // Extract Serving details
+    const servingsRaw = product.servings?.serving;
+    const servings = Array.isArray(servingsRaw) ? servingsRaw : (servingsRaw ? [servingsRaw] : []);
+    
+    // Default to a 100g serving if available, otherwise just use the first available serving
+    let serving = servings.find(s => s.metric_serving_amount === '100.000' && s.metric_serving_unit === 'g') || servings[0];
+
+    if (!serving) throw new Error("No nutritional information found for this item");
+
+    let scale = 1;
+    if (serving.metric_serving_amount) {
+      if (serving.metric_serving_unit === 'g' || serving.metric_serving_unit === 'ml') {
+        scale = 100 / parseFloat(serving.metric_serving_amount);
+      }
+    }
+
+    const parseNutrient = (val) => val ? parseFloat(val) * scale : 0;
+    const formatValue = (val) => parseFloat(val.toFixed(2));
+
+    const nutrition = {
+      energy_unit: 'kcal',
+      energy_100g: formatValue(parseNutrient(serving.calories)),
+      proteins_100g: formatValue(parseNutrient(serving.protein)),
+      fiber_100g: formatValue(parseNutrient(serving.fiber)),
+      fat_100g: formatValue(parseNutrient(serving.fat)),
+      "saturated-fat_100g": formatValue(parseNutrient(serving.saturated_fat)),
+      sugars_100g: formatValue(parseNutrient(serving.sugar)),
+      sodium_100g: formatValue(parseNutrient(serving.sodium) / 1000), 
+      salt_100g: formatValue((parseNutrient(serving.sodium) / 1000) * 2.54), 
+      carbohydrates_100g: formatValue(parseNutrient(serving.carbohydrate)),
+      cholesterol_100g: formatValue(parseNutrient(serving.cholesterol)) 
+    };
 
     return {
-      name: product.product_name || "Unknown",
-      ingredients: product.ingredients_text || "Not available",
-      nutrition: product.nutriments || {},
-      barcode: product.code || "Not available",
-      image: product.image_url || "No image available",
-      allergens: filterEnglishTags(product.allergens_tags || product.allergens),
-      categories: filterEnglishTags(product.categories_tags || product.categories),
-      brands: product.brands || "Not available",
-      labels: filterEnglishTags(product.labels_tags || product.labels),
-      quantity: product.quantity || "Not available",
+      name: product.food_name || "Unknown",
+      ingredients: product.ingredients || "Not available",
+      nutrition: nutrition,
+      barcode: barcode || "Not available",
+      image: "No image available",
+      allergens: [], 
+      categories: [product.food_type].filter(Boolean),
+      brands: product.brand_name || "Not available",
+      labels: [],
+      quantity: serving.serving_description || "Not available",
     };
+
   } catch (error) {
     throw new Error(error.message || "Error while fetching food information");
   }
 };
 
-// 🔹 Calculate Health Score
+// 🔹 Calculate Health Score (No changes)
 export const calculateHealthScore = async (userMetrics, foodName, barcode) => {
   if (!foodName && !barcode) {
     throw new Error("Provide either foodName or barcode as query parameter");
@@ -102,7 +207,7 @@ export const calculateHealthScore = async (userMetrics, foodName, barcode) => {
   };
 };
 
-// 🔹 Check Dietary Compatibility
+// 🔹 Check Dietary Compatibility (No changes)
 export const checkDietaryCompatibility = async (foodName, barcode, dietType) => {
   if (!dietType) throw new Error("dietType is required (e.g., vegan, gluten-free)");
   if (!foodName && !barcode) throw new Error("Provide either foodName or barcode");

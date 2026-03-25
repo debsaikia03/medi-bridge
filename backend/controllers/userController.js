@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 import Doctor from "../models/doctorModel.js";
 import Appointment from "../models/appoinmentModel.js";
+import OpenAI from "openai";
 
 export const signUp = async (req, res) => {
   try {
@@ -223,3 +224,67 @@ export const getUserOrDoctorById = async (req, res) => {
     res.status(500).json({ message: "Error fetching info", error: error.message });
   }
 };
+
+// Chat Assistant Controller
+export const chatSupport = async (req, res) => {
+    const openai = new OpenAI({
+        apiKey: process.env.OPENROUTER_API_KEY,
+        baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
+    });
+
+    try {
+        const { messages } = req.body;
+
+        if (!Array.isArray(messages) || messages.length === 0) {
+            return res.status(400).json({ message: "Invalid messages array" });
+        }
+
+        const response = await openai.chat.completions.create({
+            model: "openrouter/free",
+            messages,
+            max_tokens: 1024,
+            temperature: 0.7
+        });
+
+        const reply =
+            response.choices?.[0]?.message?.content ||
+            "Sorry, I could not generate a response.";
+
+        return res.status(200).json({ reply });
+    } catch (error) {
+        console.error("❌ Chat Error:", error.message);
+        return res.status(500).json({
+            message: "Error while getting AI response",
+            error: error.message
+        });
+    }
+};
+
+/*export const chatSupport = async (req, res) => {
+    // 1. Just pass the standard OpenAI key (no baseURL needed)
+    const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY, 
+    });
+
+    try {
+        const { messages } = req.body;
+
+        if (!Array.isArray(messages) || messages.length === 0) {
+            return res.status(400).json({ message: "Invalid messages array" });
+        }
+
+        const response = await openai.chat.completions.create({
+            // 2. Change to a ChatGPT model
+            model: "gpt-3.5-turbo", // or "gpt-4o-mini" (cheaper & faster) or "gpt-4o"
+            messages: messages,
+            max_tokens: 1024,
+            temperature: 0.7
+        });
+
+        const reply = response.choices?.[0]?.message?.content || "Sorry, I could not generate a response.";
+        return res.status(200).json({ reply });
+    } catch (error) {
+        console.error("❌ Chat Error:", error.message);
+        return res.status(500).json({ message: "Error", error: error.message });
+    }
+};*/
