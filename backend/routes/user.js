@@ -36,7 +36,7 @@ router.post("/bookAppointment", protect, bookAppointment);
 router.get("/getAppointments", protect, getAppointments);
 router.get("/info/:type/:id", protect, getUserOrDoctorById);
 
-router.post("/chat-support", chatSupport); 
+router.post("/chat-support", protect, chatSupport); 
 
 export default router;
 
