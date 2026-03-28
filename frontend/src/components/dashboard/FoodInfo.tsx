@@ -43,7 +43,7 @@ export default function FoodInfo() {
   const [loading, setLoading] = useState(false);
   const [userMetrics] = useState({ age: 30, height: 170, weight: 70 });
   const [notFound, setNotFound] = useState(false);
-  const [country, setCountry] = useState('United States');
+  const [country, setCountry] = useState('India');
   
   // States for handling confirmations
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -287,6 +287,7 @@ export default function FoodInfo() {
                     pattern="[0-9]*"
                     maxLength={13}
                     value={barcode}
+                    placeholder="Enter a 13-digit GSTIN number"
                     onChange={e => {
                       const val = e.target.value;
                       if (val === '' || /^\d{1,13}$/.test(val)) {
