@@ -1,6 +1,6 @@
 import axios from "axios";
 
-// 🔹 FatSecret API Credentials
+// 🔹 FatSecret API Credential
 const CLIENT_ID = "437d3dc2ee1d4ab0bde5d5783e40aa7b";
 const CLIENT_SECRET = "fba82038c9ca4efea5ea546fc32dda21";
 
