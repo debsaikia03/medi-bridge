@@ -1,8 +1,8 @@
 import axios from "axios";
 
 // 🔹 FatSecret API Credential
-const CLIENT_ID = "437d3dc2ee1d4ab0bde5d5783e40aa7b";
-const CLIENT_SECRET = "fba82038c9ca4efea5ea546fc32dda21";
+const CLIENT_ID = "602f3dc41b7248cf82be249bc774f7d6";
+const CLIENT_SECRET = "dff37088c7e24c7eabf731b8dad90b29";
 
 let fatsecretToken = null;
 let tokenExpiry = 0;
@@ -19,7 +19,7 @@ const getFatsecretToken = async () => {
     // Use URLSearchParams to guarantee perfect x-www-form-urlencoded formatting
     const authData = new URLSearchParams();
     authData.append('grant_type', 'client_credentials');
-    authData.append('scope', 'basic'); // Reverted to just 'basic' to prevent scope rejection on free tiers
+    authData.append('scope', 'basic'); // Returned to basic for name search only
 
     const response = await axios.post(
       'https://oauth.fatsecret.com/connect/token',
@@ -47,52 +47,72 @@ const getFatsecretToken = async () => {
   }
 };
 
-// 🔹 Get Food Info (Using FatSecret API)
+// 🔹 Get Food Info (Using FatSecret API for Name, OpenFoodFacts for Barcode)
 export const getFoodInfo = async (foodName, barcode) => {
   if (!foodName && !barcode) {
     throw new Error("Either provide the food name or barcode");
   }
 
   try {
+    // === 1️⃣ OPENFOODFACTS FOR BARCODE === //
+    if (barcode) {
+      const res = await axios.get(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json`);
+      if (res.data?.status !== 1 || !res.data?.product) {
+        throw new Error("No product found with the provided barcode");
+      }
+      
+      const product = res.data.product;
+      const nutriments = product.nutriments || {};
+      
+      const formatValue = (val) => typeof val === 'number' ? parseFloat(val.toFixed(2)) : 0;
+
+      return {
+        name: product.product_name || "Unknown",
+        ingredients: product.ingredients_text || "Not available",
+        nutrition: {
+          energy_unit: 'kcal',
+          energy_100g: formatValue(nutriments['energy-kcal_100g']),
+          proteins_100g: formatValue(nutriments['proteins_100g']),
+          fiber_100g: formatValue(nutriments['fiber_100g']),
+          fat_100g: formatValue(nutriments['fat_100g']),
+          "saturated-fat_100g": formatValue(nutriments['saturated-fat_100g']),
+          sugars_100g: formatValue(nutriments['sugars_100g']),
+          sodium_100g: formatValue(nutriments['sodium_100g']),
+          salt_100g: formatValue(nutriments['salt_100g']),
+          carbohydrates_100g: formatValue(nutriments['carbohydrates_100g']),
+          cholesterol_100g: formatValue(nutriments['cholesterol_100g'])
+        },
+        barcode: barcode,
+        image: product.image_url || "No image available",
+        allergens: product.allergens_tags ? product.allergens_tags.map(a => a.replace('en:', '')) : [],
+        categories: product.categories_tags ? product.categories_tags.map(c => c.replace('en:', '')) : [],
+        brands: product.brands || "Not available",
+        labels: product.labels_tags ? product.labels_tags.map(l => l.replace('en:', '')) : [],
+        quantity: product.quantity || "Not available",
+      };
+    }
+
+    // === 2️⃣ FATSECRET FOR FOOD NAME === //
     const token = await getFatsecretToken();
-    
     const headers = { 
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/x-www-form-urlencoded'
     };
 
-    let foodId;
-
-    if (barcode) {
-      // Find Food ID by Barcode using URLSearchParams
-      const data = new URLSearchParams({ method: 'food.find_id_for_barcode', barcode, format: 'json' });
-      const res = await axios.post('https://platform.fatsecret.com/rest/server.api', data, { headers });
-      
-      if (res.data?.error) throw new Error(`FatSecret API Error: ${res.data.error.message}`);
-      
-      if (res.data && res.data.food_id && res.data.food_id.value) {
-        foodId = res.data.food_id.value;
-      } else {
-        throw new Error("No product found with the provided barcode");
-      }
-    } else if (foodName) {
-      // Find Food ID by Name using URLSearchParams
-      const data = new URLSearchParams({ method: 'foods.search', search_expression: foodName, format: 'json', max_results: 1 });
-      const res = await axios.post('https://platform.fatsecret.com/rest/server.api', data, { headers });
-      
-      // Explicitly catch and bubble FatSecret API errors so you know if it's an API rejection
-      if (res.data?.error) throw new Error(`FatSecret API Error: ${res.data.error.message}`);
-      
-      const foodsInfo = res.data.foods?.food;
-      if (!foodsInfo) throw new Error(`No product found matching "${foodName}"`);
-      
-      const firstFood = Array.isArray(foodsInfo) ? foodsInfo[0] : foodsInfo;
-      if (!firstFood || !firstFood.food_id) throw new Error(`No product found matching "${foodName}"`);
-      
-      foodId = firstFood.food_id;
-    }
-
-    if (!foodId) throw new Error("No product found");
+    // Find Food ID by Name using URLSearchParams
+    const data = new URLSearchParams({ method: 'foods.search', search_expression: foodName, format: 'json', max_results: 1 });
+    const res = await axios.post('https://platform.fatsecret.com/rest/server.api', data, { headers });
+    
+    // Explicitly catch and bubble FatSecret API errors
+    if (res.data?.error) throw new Error(`FatSecret API Error: ${res.data.error.message}`);
+    
+    const foodsInfo = res.data.foods?.food;
+    if (!foodsInfo) throw new Error(`No product found matching "${foodName}"`);
+    
+    const firstFood = Array.isArray(foodsInfo) ? foodsInfo[0] : foodsInfo;
+    if (!firstFood || !firstFood.food_id) throw new Error(`No product found matching "${foodName}"`);
+    
+    const foodId = firstFood.food_id;
 
     // Fetch Full Nutritional Information using Food ID
     const foodData = new URLSearchParams({ method: 'food.get.v3', food_id: foodId, format: 'json' });
@@ -107,7 +127,7 @@ export const getFoodInfo = async (foodName, barcode) => {
     const servingsRaw = product.servings?.serving;
     const servings = Array.isArray(servingsRaw) ? servingsRaw : (servingsRaw ? [servingsRaw] : []);
     
-    // Default to a 100g serving if available, otherwise just use the first available serving
+    // Default to a 100g serving if available
     let serving = servings.find(s => s.metric_serving_amount === '100.000' && s.metric_serving_unit === 'g') || servings[0];
 
     if (!serving) throw new Error("No nutritional information found for this item");
@@ -140,7 +160,7 @@ export const getFoodInfo = async (foodName, barcode) => {
       name: product.food_name || "Unknown",
       ingredients: product.ingredients || "Not available",
       nutrition: nutrition,
-      barcode: barcode || "Not available",
+      barcode: "Not available",
       image: "No image available",
       allergens: [], 
       categories: [product.food_type].filter(Boolean),
